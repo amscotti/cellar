@@ -1,0 +1,5 @@
+# ADR-0018 — Admin reads are open on loopback; every mutation needs the token.
+
+*Context:* The dashboard has to be usable from a browser on the operator's machine, and the service is expected to run on a laptop during the POC. Requiring a token for `GET /admin` would mean pasting it into the address bar on every visit. *Decision:* `GET /admin*` is open when the listener is a loopback address (or `--admin-open 1` is set) and gated everywhere else; every mutating endpoint requires the admin token, always. The dashboard trades the token for an HttpOnly cookie at `/admin?token=…` and that cookie is accepted only for reads plus same-origin form posts; `?token=` is accepted only by the unlock endpoint. *Consequences:* The security boundary is the bind address: binding to `0.0.0.0` gates all reads. A future HTML-returning data plane would break the same-origin argument, which is why cells return `application/json` and never choose their own content type.
+
+_Status: accepted. Immutable; supersede rather than edit._

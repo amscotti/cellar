@@ -1,0 +1,5 @@
+# ADR-0004 — One transaction per invocation, enforced by SQLite, not by convention.
+
+*Context:* Guest code can fail at any point, and a guest that issues `COMMIT` itself would break atomicity invisibly. *Decision:* The runtime issues `BEGIN IMMEDIATE` before the guest runs and `COMMIT` only on success; every error, timeout or OOM triggers `ROLLBACK`. On every cell connection the host installs `sqlite3_set_authorizer`, denying `SQLITE_TRANSACTION` (so `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` from SQL fail), `SQLITE_ATTACH`, `SQLITE_DETACH`, `SQLITE_PRAGMA` (except a read-only allowlist), and `SQLITE_FUNCTION` for `load_extension`. Blocking is immediate because the authorizer runs at prepare time. Host-internal statements run under an `internal` flag the authorizer checks. *Consequences:* Guest authors never write transaction handling; a guest cannot end its own transaction or open another cell's file; `db.tx` is implemented host-side with savepoints so nesting still works.
+
+_Status: accepted. Immutable; supersede rather than edit._

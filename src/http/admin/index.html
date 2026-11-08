@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cellar</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; margin: 0; padding: 2rem; max-width: 60rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 1.5rem; }
+  h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: .06em; opacity: .6; margin: 2rem 0 .5rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .75rem; }
+  .card { border: 1px solid #8884; border-radius: .5rem; padding: .75rem 1rem; }
+  .card .k { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; opacity: .6; }
+  .card .v { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid #8883; }
+  code { font: 13px ui-monospace, monospace; }
+  form.inline { display: inline; }
+  button { font: inherit; padding: .2rem .6rem; border-radius: .3rem; border: 1px solid #8886; background: transparent; cursor: pointer; }
+  textarea, input[type=text] { width: 100%; font: 13px ui-monospace, monospace; padding: .5rem; border-radius: .3rem; border: 1px solid #8886; background: transparent; }
+  .banner { border: 1px solid #c85; border-radius: .4rem; padding: .6rem .8rem; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<h1>cellar <span id="stat-version"></span></h1>
+{{error_banner}}
+
+<section class="cards">
+  <div class="card"><div class="k">uptime</div><div class="v" id="stat-uptime">{{uptime}}</div></div>
+  <div class="card"><div class="k">known cells</div><div class="v" id="stat-cells">{{cells}}</div></div>
+  <div class="card"><div class="k">resident</div><div class="v" id="stat-resident">{{resident}}</div></div>
+  <div class="card"><div class="k">invocations</div><div class="v" id="stat-invocations">{{invocations}}</div></div>
+  <div class="card"><div class="k">errors</div><div class="v" id="stat-errors">{{errors}}</div></div>
+</section>
+
+<h2>cells</h2>
+<table>
+  <thead><tr><th>key</th><th>module v</th><th>created (UTC)</th></tr></thead>
+  <tbody id="cells-body">{{rows}}</tbody>
+</table>
+
+<h2>deploy a module</h2>
+<form method="post" action="/admin/deploy">
+  <p><input type="text" name="cell" placeholder="cell key, e.g. room-42" required></p>
+  <p><textarea name="source" rows="10" placeholder="-- Lua module: return a table of functions" required></textarea></p>
+  <p><button type="submit">deploy</button></p>
+</form>
+
+<h2>deployments</h2>
+<table>
+  <thead><tr><th>module</th><th>version</th><th>blob</th></tr></thead>
+  <tbody>{{deploys}}</tbody>
+</table>
+
+<p><small>no build step, no CDN, no JS required. This page is rendered by the same binary that runs your functions.</small></p>
+
+<script>
+  // Progressive enhancement only: the page above is complete without this.
+  const es = new EventSource('/admin/events');
+  es.addEventListener('stats', function (e) {
+    const s = JSON.parse(e.data);
+    ['uptime', 'cells', 'resident', 'invocations', 'errors'].forEach(function (k) {
+      const el = document.getElementById('stat-' + k);
+      if (el) el.textContent = (k === 'uptime') ? s[k] + 's' : s[k];
+    });
+  });
+</script>
+</body>
+</html>

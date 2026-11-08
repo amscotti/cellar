@@ -1,0 +1,70 @@
+# Gate thresholds. Every number the build is judged by lives here.
+# Gate ids match gates/run.sh; the phase each becomes measurable is in the plan,
+# never in this file (code must not cite plan phases).
+
+[G1]
+what = "zig build test exits 0 with zero leaks"
+command = "zig build test"
+
+[G2]
+what = "cellar --version prints version, backend, caps"
+command = "./zig-out/bin/cellar --version"
+max_binary_bytes = 20971520
+
+[G3]
+what = "GET /healthz returns ok"
+command = "curl -sf localhost:8080/healthz"
+
+[G4]
+what = "echo invoke p50/p99, release=safe, 1000 warmup, median of 3 trials"
+p50_us_max = 5000
+p99_us_max = 25000
+command = "zig build bench --release=safe"
+
+[G5]
+what = "two cells, same module, 3 rows each, isolated"
+command = "zig build test -Dtest-filter=cells"
+
+[G6]
+what = "write 5 rows then raise leaves 0 rows"
+command = "zig build test -Dtest-filter=atomicity"
+
+[G7]
+what = "100 invocations, 64 clients, one cell, counter == 100"
+command = "zig build test -Dtest-filter=serialization"
+
+[G8]
+what = "slow v1 + deploy v2: in-flight returns v1, next returns v2, blob sweepable"
+command = "zig build test -Dtest-filter=deploy"
+
+[G9]
+what = "dashboard markers + 4 sse events in 6s + sse ext referenced + 45s idle stream"
+command = "zig build test -Dtest-filter=sse"
+
+[G10]
+what = "1h soak: rss growth < 5% and < 4 MiB, flat region counters"
+hours = 1
+rate = 50
+rss_growth_pct_max = 5
+rss_growth_kb_max = 4096
+
+[G11]
+what = "while true -> 504 within budget+100ms; vm_bytes back <= 1 MiB; 256MB alloc -> 507"
+command = "zig build test -Dtest-filter=limits"
+
+[G12]
+what = "writes past --db-max-mb -> db_full; cell still readable"
+command = "zig build test -Dtest-filter=dbcap"
+
+[G13]
+what = "backend kills while-true at 50ms and raises catchable OOM at 1MiB"
+deadline_ms = 50
+budget_mb = 1
+
+[G14]
+what = "guest COMMIT/ATTACH/PRAGMA/load_extension rejected, rows unchanged"
+command = "zig build test -Dtest-filter=authorizer"
+
+[G15]
+what = "no cell lookup outside src/runtime bypasses Locator"
+command = "gates/check-locator.sh"

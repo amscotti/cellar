@@ -1,0 +1,5 @@
+# ADR-0024 — One coroutine per invocation, then an outbound fetch pool.
+
+*Context:* A guest calling `http.fetch` must not tie a shard thread to a socket, but a blocking C call cannot be suspended without somewhere for the yield to land. *Decision:* Run each invocation on a Lua coroutine, resumed once. `http.fetch` builds a request table, tags the yield, and yields; the shard parks the cell (token, arena and open transaction intact) and hands the request to a worker pool; the completion resumes the coroutine with `(ok, value)`. A second fetch re-parks. The invocation deadline is enforced on the resume path and, because a fetch worker cannot be cancelled, by a reaper that aborts a parked invocation past its deadline. *Consequences:* A cell with a parked invocation runs nothing else — its transaction is open — so invocations for that cell are deferred, not dropped. The guest sees linear code; the runtime sees one open transaction per parked cell, which is why the deadline must abort rather than return a value the guest can ignore.
+
+_Status: accepted. Immutable; supersede rather than edit._

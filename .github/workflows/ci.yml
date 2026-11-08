@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig 0.17.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+
+      - name: Format check
+        run: zig fmt --check src/
+
+      - name: Fetch dependencies (retry on flake)
+        run: |
+          for i in 1 2 3 4 5; do
+            if zig build --fetch; then exit 0; fi
+            echo "fetch attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
+
+      - name: Unit tests
+        run: zig build test
+
+      - name: Gates (L1, L2, G1-G10, G15)
+        run: bash gates/run.sh 3
+
+      - name: Upload gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-evidence
+          path: gates/evidence/
+          if-no-files-found: ignore
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig 0.17.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+
+      - name: Format check
+        run: zig fmt --check src/
+
+      - name: Fetch dependencies (retry on flake)
+        run: |
+          for i in 1 2 3 4 5; do
+            if zig build --fetch; then exit 0; fi
+            echo "fetch attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
+
+      - name: Build and unit test (native arm64)
+        run: |
+          zig build
+          zig build test
+          ./zig-out/bin/cellar --version
+          ./zig-out/bin/cellar doctor --data /tmp/cellar-doctor-data
+
+  # Release binaries for every tag push like `v0.1.0`. The `release` job
+  # below only runs after `test` and `macos` are green, so a release always
+  # means a tested commit.
+  assets:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, macos]
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-linux-gnu
+            asset: cellar-x86_64-linux
+          - runner: ubuntu-24.04-arm
+            target: aarch64-linux-gnu
+            asset: cellar-aarch64-linux
+          - runner: macos-15
+            target: aarch64-macos
+            asset: cellar-aarch64-macos
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig 0.17.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+
+      - name: Fetch dependencies (retry on flake)
+        run: |
+          for i in 1 2 3 4 5; do
+            if zig build --fetch; then exit 0; fi
+            echo "fetch attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
+
+      - name: Build ReleaseSafe
+        run: |
+          zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.target }}
+          cp zig-out/bin/cellar ${{ matrix.asset }}
+          ./${{ matrix.asset }} --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [assets]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      # gh release create resolves the tag target through git, so the
+      # checkout must come first (download-artifact alone leaves no repo).
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          find dist -type f -exec mv {} . \;
+          ls -la cellar-*
+          gh release create "${GITHUB_REF_NAME}" cellar-* \
+            --title "cellar ${GITHUB_REF_NAME}" \
+            --generate-notes
